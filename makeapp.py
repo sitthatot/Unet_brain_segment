@@ -19,6 +19,7 @@ from PIL import Image
 from glob import glob
 import os
 import random
+import time
 
 
 class DoubleConv(nn.Module):
@@ -101,6 +102,9 @@ def single_image_inference(image_pth, model_pth, device):
     model.load_state_dict(torch.load(model_pth, map_location=device))
     model.eval()
 
+    # Calculate model size in MB
+    model_size = os.path.getsize(model_pth) / (1024 * 1024)
+
     # Define image transformation pipeline
     transform = transforms.Compose([
         transforms.Resize((128, 128)),
@@ -112,9 +116,11 @@ def single_image_inference(image_pth, model_pth, device):
     real_mask = transform(Image.open(image_pth.replace(".tif", "_mask.tif"))).float().to(device)
     img = img.unsqueeze(0)
 
-    # Perform inference
+    # Perform inference and track time
+    start_time = time.time()
     with torch.no_grad():
         pred_mask = model(img)
+    inference_time = time.time() - start_time
 
     # Post-process predicted mask
     pred_mask = pred_mask.squeeze(0).cpu().detach()
@@ -142,6 +148,9 @@ def single_image_inference(image_pth, model_pth, device):
     
     plt.show()
 
+    # Return model size and inference time
+    return model_size, inference_time
+
 
 def browse_image():
     global selected_image_path  # Declare as global to update the variable
@@ -167,7 +176,10 @@ def run_inference():
             raise FileNotFoundError("Please select both an image and a model file.")
         
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        single_image_inference(selected_image_path, selected_model_path, device)
+        model_size, inference_time = single_image_inference(selected_image_path, selected_model_path, device)
+        
+        # Display model size and inference time
+        messagebox.showinfo("Results", f"Model size: {model_size:.2f} MB\nInference time: {inference_time:.4f} seconds")
     
     except Exception as e:
         messagebox.showerror("Error", str(e))
